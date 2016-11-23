@@ -11,6 +11,7 @@ using Microsoft.Bot.Builder.Dialogs;
 using Microsoft.Bot.Builder.Luis;
 using Microsoft.Bot.Builder.Luis.Models;
 using System.Collections.Generic;
+using Bot_Application1.Models;
 
 namespace Bot_Application1
 {
@@ -26,7 +27,15 @@ namespace Bot_Application1
         {
             if (activity.Type == ActivityTypes.Message)
             {
-                await Conversation.SendAsync(activity, () => new BankDialog());
+                HttpClient client = new HttpClient();
+                string URL = "http://shrek.azurewebsites.net/tables/BankData?zumo-api-version=2.0.0";
+                string x = await client.GetStringAsync(new Uri(URL));
+
+                BankObject.RootObject[] rootObject;
+                rootObject = JsonConvert.DeserializeObject<BankObject.RootObject[]>(x);
+
+
+                await Conversation.SendAsync(activity, () => new BankDialog(rootObject));
             }
             else
             {
