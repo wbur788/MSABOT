@@ -143,40 +143,72 @@ namespace Bot_Application1
         EntityRecommendation accountType1, accountType2;
         int a, b;
         ArrayList entList = new ArrayList();
-        string temp;
+        string temp, numString;
+        Double amountToTransfer;
         [LuisIntent("Transfer")]
         public async Task Transfer(IDialogContext context, LuisResult result)
         {
             
               
-            ArrayList accountList = getAccounts();
-            
-           foreach (EntityRecommendation s in result.Entities)
+           ArrayList accountList = getAccounts();
+            if (accountList.Count > 3)
             {
-                temp = s.Entity;
-                entList.Add(temp);
+                //Taking each entity found in the user message and stores in an ArrayList
+                foreach (EntityRecommendation s in result.Entities)
+                {
+                    temp = s.Entity;
+                    entList.Add(temp);
+                }
+
+                a = accountList.IndexOf(entList[0]);
+                b = accountList.IndexOf(entList[1]);
+
+                //LUIS takes numbers with decimal points and puts a space in between the numbers Eg. $12.24 becomes $12 . 24
+                //This takes that value and removes the white space
+                if (entList[2].ToString().Contains("."))
+                {
+                    string[] tempList = entList[2].ToString().Split('.');
+                    numString += tempList[0].Trim();
+                    numString += '.';
+                    numString += tempList[1].Trim();                   
+                    amountToTransfer = Convert.ToDouble(numString);
+
+                }
+                else
+                {
+                    amountToTransfer = Convert.ToDouble(entList[2]);
+
+                }
+                int num = accountList.Count / 3;
+                Double balanceA = Convert.ToDouble(accountList[a + num]);
+                Double balanceB = Convert.ToDouble(accountList[b + num]);
+
+                if (balanceA - amountToTransfer > 0)
+                {
+                    balanceA -= amountToTransfer;
+                    balanceB += amountToTransfer;
+
+                    String endOutput = "";
+                    foreach (String s in accountList)
+                    {
+                        endOutput += s + " ";
+                    }
+
+                    await context.PostAsync($"Transferring ${amountToTransfer} from {accountList[a]} (${accountList[a + num]}) to {accountList[b]} (${accountList[b + num]}).");
+                    await context.PostAsync($"Your {accountList[b]} account now has ${balanceB} and your {accountList[a]} account now has ${balanceA}.");
+                }
+                else
+                {
+                    await context.PostAsync("You do not have enough money to transfer, please try again.");
+                }
+                
+                context.Wait(MessageReceived);
             }
-
-            a = accountList.IndexOf(entList[0]);
-            b = accountList.IndexOf(entList[1]);
-            Double amountToTransfer = Convert.ToDouble(entList[2]);
-            int num = accountList.Count / 3;
-            Double balanceA = Convert.ToDouble(accountList[a + num]);
-            Double balanceB = Convert.ToDouble(accountList[b + num]);
-
-            balanceA -= amountToTransfer;
-            balanceB += amountToTransfer;
-
-            String endOutput = "";                
-            foreach (String s in accountList)
+            else
             {
-                endOutput += s + " ";
+                await context.PostAsync("Sorry you do not have another account to transfer to.");
+                context.Wait(MessageReceived);
             }
-
-            await context.PostAsync($"Transferring ${amountToTransfer} from {accountList[a]} (${accountList[a+num]}) to {accountList[b]} (${accountList[b+num]}).");
-            await context.PostAsync($"Your {accountList[b]} account now has ${balanceB} and your {accountList[a]} account now has ${balanceA}.");
-            context.Wait(MessageReceived);
-           
 
 
             
