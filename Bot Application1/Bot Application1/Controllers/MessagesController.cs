@@ -22,20 +22,56 @@ namespace Bot_Application1
         /// POST: api/Messages
         /// Receive a message from a user and reply to it
         /// </summary>
+        /// 
+        public int id;
+
         [ResponseType(typeof(void))]
         public virtual async Task<HttpResponseMessage> Post([FromBody] Activity activity)
         {
             if (activity.Type == ActivityTypes.Message)
             {
+                ConnectorClient connector = new ConnectorClient(new Uri(activity.ServiceUrl));
+                StateClient stateClient = activity.GetStateClient();
+                BotData userData = await stateClient.BotState.GetUserDataAsync(activity.ChannelId, activity.From.Id);
+                var userMessage = activity.Text;
+                String endOutput="";
+
                 HttpClient client = new HttpClient();
                 string URL = "http://shrek.azurewebsites.net/tables/BankData?zumo-api-version=2.0.0";
                 string x = await client.GetStringAsync(new Uri(URL));
 
                 BankObject.RootObject[] rootObject;
                 rootObject = JsonConvert.DeserializeObject<BankObject.RootObject[]>(x);
+                Boolean doIt = true;
 
+                //Checks the user input and if it matches the database's user and pass, then it will record the ID for further use.
+                foreach(BankObject.RootObject name in rootObject ){
+                    if (userMessage == name.Username + " " + name.Password)
+                    {
+                        id = Convert.ToInt32(name.CustomerNo);
+                        userData.SetProperty<int>("ID", id);
+                        await stateClient.BotState.SetUserDataAsync(activity.ChannelId, activity.From.Id, userData);
 
-                await Conversation.SendAsync(activity, () => new BankDialog(rootObject));
+                        
+                        Activity infoReply = activity.CreateReply($"Hello {name.FirstName}. What can we do for you today?");
+                        await connector.Conversations.ReplyToActivityAsync(infoReply);
+                        doIt = false;
+                    }
+                }
+
+                if (userMessage.ToLower().Contains("logout"))
+                {
+                    Activity infoReply = activity.CreateReply("Logging out, thank you for using Contoso Bank");
+                    await connector.Conversations.ReplyToActivityAsync(infoReply);
+                    await stateClient.BotState.DeleteStateForUserAsync(activity.ChannelId, activity.From.Id);
+                    doIt = false;
+                }
+
+                //So that LUIS doesn't pick up on input that is meant for the state client
+                if (doIt)
+                {
+                    await Conversation.SendAsync(activity, () => new BankDialog(rootObject, userData.GetProperty<int>("ID")));
+                }
             }
             else
             {

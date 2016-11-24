@@ -13,6 +13,7 @@ namespace Bot_Application1.Models
             public string createdAt { get; set; }
             public string updatedAt { get; set; }
             public string version { get; set; }
+            public string CustomerNo { get; set; }
             public string FirstName { get; set; }
             public string LastName { get; set; }
             public string DOB { get; set; }
@@ -21,6 +22,7 @@ namespace Bot_Application1.Models
             public string AccountNo { get; set; }
             public string AccountName { get; set; }
             public string AccountType { get; set; }
+            public string AccountBalance { get; set; }
             public string Username { get; set; }
             public string Password { get; set; }
             public bool deleted { get; set; }
