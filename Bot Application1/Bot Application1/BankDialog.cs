@@ -2,25 +2,50 @@
 namespace Bot_Application1
 {
     using System;
-    using System.Collections.Generic;
     using System.Linq;
-    using System.Web;
-    using System.Web.Http;
-    using System.Web.Http.Description;
-    using Microsoft.Bot.Connector;
     using System.Threading.Tasks;
     using Microsoft.Bot.Builder.Dialogs;
     using Microsoft.Bot.Builder.Luis;
     using Microsoft.Bot.Builder.Luis.Models;
-    using Newtonsoft.Json;
-    using Bot_Application1.Models;
+    using Models;
     using System.Net.Http;
     using System.Collections;
+    using System.Diagnostics;
+    using System.Text;
+    using System.Web.Script.Serialization;
+    using Microsoft.Bot.Connector;
+    using System.Collections.Generic;
+
+    public static class HttpClientExtensions
+    {
+        public static async Task<HttpResponseMessage> PatchAsync(this HttpClient client, Uri requestUri, HttpContent iContent)
+        {
+            var method = new HttpMethod("PATCH");
+            var request = new HttpRequestMessage(method, requestUri)
+            {
+                Content = iContent
+            };
+
+            HttpResponseMessage response = new HttpResponseMessage();
+            try
+            {
+                response = await client.SendAsync(request);
+            }
+            catch (TaskCanceledException e)
+            {
+                Debug.WriteLine("ERROR: " + e.ToString());
+            }
+
+            return response;
+        }
+    }
 
     [LuisModel("755a4c3b-9280-40b8-9b80-c71ff2c82514", "a2fcb42f381949c687817af4370dbecc")]
     [Serializable]
     public class BankDialog : LuisDialog<Object>, IDialog<object>
     {
+        HttpClient client = new HttpClient();
+        string URL = "http://shrek.azurewebsites.net/tables/BankData?zumo-api-version=2.0.0";
 
         BankObject.RootObject[] rootObject;
         int id=-1;
@@ -43,35 +68,26 @@ namespace Bot_Application1
             context.Wait(MessageReceived);
         }
 
-        //WHERE INTENT = GREETING
-        [LuisIntent("Greeting")]
-        public async Task Greeting(IDialogContext context, LuisResult result)
-        {
-            string message = "Hello. Welcome to Contoso Bank, are you an existing member or new to Contoso Banking Bot?";
-            await context.PostAsync(message);
-            context.Wait(MessageReceived);
-           
-        }
-
         
 
-        //WHERE INTENT = LOGIN
-        [LuisIntent("Login")]
-        public async Task Login(IDialogContext context, LuisResult result)
+        //WHERE INTENT = CONVERT CURRENCY
+        string CCTemp;
+        ArrayList entListCC;
+        [LuisIntent("ConvertCurrency")]
+        public async Task ConvertCurrency(IDialogContext context, LuisResult result)
         {
-            string message = "Please enter your username and password (separated with a space)";
-            await context.PostAsync(message);
-            context.Wait(MessageReceived);
+            foreach (EntityRecommendation s in result.Entities)
+            {
+                CCTemp = s.Entity;
+                entListCC.Add(temp);
+            }
+            string x = await client.GetStringAsync(new Uri("http://api.fixer.io/latest?base=" + entList[1]));
+
+
+
         }
 
-        //WHERE INTENT = LOGIN
-        [LuisIntent("Signup")]
-        public async Task Signup(IDialogContext context, LuisResult result)
-        {
-            string message = "Please enter your username and password (separated with a space)";
-            await context.PostAsync(message);
-            context.Wait(MessageReceived);
-        }
+
 
         //WHERE INTENT = DISPLAYDETAILS
         public const string Entity_PersonalDetails = "PersonalDetails";
@@ -83,10 +99,10 @@ namespace Bot_Application1
             //If no entity is found, it will display all details, otherwise just the specific detail
             if (!result.TryFindEntity(Entity_PersonalDetails, out personalDetail))
             {
-                String entity = personalDetail.Entity.ToLower();
+                /*String entity = personalDetail.Entity.ToLower();
                 await context.PostAsync("Showing all personal details.");
                 await context.PostAsync(rootObject[id]+"");
-                context.Wait(MessageReceived);
+                context.Wait(MessageReceived);*/
             }
             else
             {
@@ -140,7 +156,6 @@ namespace Bot_Application1
 
         //WHERE INTENT = TRANSFER
         public const string Entity_AccountType = "AccountType";
-        EntityRecommendation accountType1, accountType2;
         int a, b;
         ArrayList entList = new ArrayList();
         string temp, numString;
@@ -148,7 +163,6 @@ namespace Bot_Application1
         [LuisIntent("Transfer")]
         public async Task Transfer(IDialogContext context, LuisResult result)
         {
-            
               
            ArrayList accountList = getAccounts();
             if (accountList.Count > 3)
@@ -172,7 +186,6 @@ namespace Bot_Application1
                     numString += '.';
                     numString += tempList[1].Trim();                   
                     amountToTransfer = Convert.ToDouble(numString);
-
                 }
                 else
                 {
@@ -188,14 +201,28 @@ namespace Bot_Application1
                     balanceA -= amountToTransfer;
                     balanceB += amountToTransfer;
 
-                    String endOutput = "";
-                    foreach (String s in accountList)
-                    {
-                        endOutput += s + " ";
-                    }
-
                     await context.PostAsync($"Transferring ${amountToTransfer} from {accountList[a]} (${accountList[a + num]}) to {accountList[b]} (${accountList[b + num]}).");
                     await context.PostAsync($"Your {accountList[b]} account now has ${balanceB} and your {accountList[a]} account now has ${balanceA}.");
+
+                    accountList[a + num] = balanceA;
+                    accountList[b + num] = balanceB;
+
+                    //Creating a string for the updated account balances to send back to the database
+                    String accountBalanceStr = "{";
+                    for (int i = num+2; i < accountList.Count; i++)
+                    {
+                        accountBalanceStr += accountList[i] + ",";
+                    }
+                    accountBalanceStr = accountBalanceStr.Trim(',') + "}";
+
+                    rootObject[id].AccountBalance = accountBalanceStr;
+                   
+
+                    var json = new JavaScriptSerializer().Serialize(rootObject[id]);
+                    HttpContent httpContent = new StringContent(json, Encoding.UTF8, "application/json");
+                    var responseMessage = await client.PatchAsync(new Uri(URL), httpContent);
+
+                    
                 }
                 else
                 {
@@ -210,8 +237,8 @@ namespace Bot_Application1
                 context.Wait(MessageReceived);
             }
 
-
             
+
         }
 
         //Getting all the account info into one arraylist
